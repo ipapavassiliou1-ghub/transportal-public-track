@@ -186,8 +186,6 @@
         }
       );
 
-      }
-
       const raw = await response.json();
       const data = Array.isArray(raw) ? raw[0] : raw;
 
@@ -205,13 +203,16 @@
           eventsEl.appendChild(div);
         });
       } else {
-        eventsEl.innerHTML = '<div class="muted">No tracking events available yet.</div>';
+        eventsEl.innerHTML =
+          '<div class="muted">No tracking events available yet.</div>';
       }
 
       resultEl.style.display = 'block';
 
     } catch (err) {
-      errorEl.textContent = 'Unable to retrieve tracking information. Please try again later.';
+      console.error(err);
+      errorEl.textContent =
+        'Unable to retrieve tracking information. Please try again later.';
       errorEl.style.display = 'block';
     } finally {
       trackBtn.disabled = false;
