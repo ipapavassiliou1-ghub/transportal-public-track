@@ -186,19 +186,23 @@
         }
       );
 
+      if (!response.ok) {
+        throw new Error('API error');
+      }
+
       const raw = await response.json();
       const data = Array.isArray(raw) ? raw[0] : raw;
 
-      statusEl.textContent = `Status: ${data.status ?? 'Unknown'}`;
-      courierEl.textContent = `Courier: ${data.carrier ?? 'Unknown'}`;
+      statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
+      courierEl.textContent = `Carrier: ${data.carrier || 'Unknown'}`;
 
       if (Array.isArray(data.events) && data.events.length > 0) {
         data.events.forEach(e => {
           const div = document.createElement('div');
           div.className = 'event';
           div.innerHTML = `
-            <div><strong>${e.status ?? 'Update'}</strong></div>
-            <div class="muted">${e.datetime ?? ''} ${e.location ?? ''}</div>
+            <div><strong>${e.status || 'Update'}</strong></div>
+            <div class="muted">${e.datetime || ''} ${e.location || ''}</div>
           `;
           eventsEl.appendChild(div);
         });
