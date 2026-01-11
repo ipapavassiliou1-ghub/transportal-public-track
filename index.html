@@ -186,11 +186,10 @@
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Tracking service unavailable');
       }
 
-      const data = await response.json();
+      const raw = await response.json();
+      const data = Array.isArray(raw) ? raw[0] : raw;
 
       statusEl.textContent = `Status: ${data.status ?? 'Unknown'}`;
       courierEl.textContent = `Courier: ${data.carrier ?? 'Unknown'}`;
