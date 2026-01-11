@@ -126,7 +126,7 @@
     </p>
 
     <div class="card">
-      <label for="trackingInput">Tracking number</label>
+      <label for="trackingInput">Tracking number (no spaces)</label>
       <input
         id="trackingInput"
         type="text"
@@ -194,7 +194,13 @@
       const data = Array.isArray(raw) ? raw[0] : raw;
 
       statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
-      courierEl.textContent = `Carrier: ${data.carrier || 'Unknown'}`;
+      
+      const carrier =
+        !data.carrier || data.carrier === 'UNKNOWN'
+        ? 'Not detected yet'
+        : data.carrier;
+
+      courierEl.textContent = `Carrier: ${carrier}`;
 
       if (Array.isArray(data.events) && data.events.length > 0) {
         data.events.forEach(e => {
@@ -207,8 +213,12 @@
           eventsEl.appendChild(div);
         });
       } else {
-        eventsEl.innerHTML =
-          '<div class="muted">No tracking events available yet.</div>';
+        eventsEl.innerHTML = `
+          <div class="muted">
+            No tracking events available yet.<br />
+            Tracking updates usually appear after the first scan by the courier.
+      </div>
+      `;
       }
 
       resultEl.style.display = 'block';
