@@ -53,13 +53,14 @@
       margin-bottom: 8px;
     }
 
-    input {
+    input, select {
       width: 100%;
       padding: 14px 16px;
       font-size: 16px;
       border-radius: 10px;
       border: 1px solid #d1d5db;
       margin-bottom: 16px;
+      background: #fff;
     }
 
     button {
@@ -77,6 +78,13 @@
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    .helper {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: -8px;
+      margin-bottom: 16px;
     }
 
     .result {
@@ -126,13 +134,27 @@
     </p>
 
     <div class="card">
-      <label for="trackingInput">Tracking number (no spaces)</label>
+      <label for="trackingInput">Tracking number</label>
       <input
         id="trackingInput"
         type="text"
         placeholder="e.g. RR123456789GR"
         autocomplete="off"
       />
+
+      <label for="carrierSelect">Carrier (optional)</label>
+      <select id="carrierSelect">
+        <option value="AUTO">Auto (recommended)</option>
+        <option value="ELTA">ELTA</option>
+        <option value="ACS">ACS</option>
+        <option value="GENIKI">Geniki Taxydromiki</option>
+        <option value="SPEEDEX">Speedex</option>
+        <option value="COURIER_CENTER">Courier Center</option>
+      </select>
+
+      <div class="helper">
+        If you know the carrier, selecting it may improve results.
+      </div>
 
       <button id="trackBtn">Track shipment</button>
 
@@ -141,7 +163,6 @@
       <div id="result" class="result" style="display:none;">
         <div class="status" id="status"></div>
         <div class="muted" id="courier"></div>
-
         <div id="events" style="margin-top:16px;"></div>
       </div>
     </div>
@@ -154,6 +175,7 @@
 <script>
   const trackBtn = document.getElementById('trackBtn');
   const trackingInput = document.getElementById('trackingInput');
+  const carrierSelect = document.getElementById('carrierSelect');
   const resultEl = document.getElementById('result');
   const statusEl = document.getElementById('status');
   const courierEl = document.getElementById('courier');
@@ -162,6 +184,7 @@
 
   trackBtn.addEventListener('click', async () => {
     const tracking = trackingInput.value.trim();
+    const carrier = carrierSelect.value;
 
     errorEl.style.display = 'none';
     resultEl.style.display = 'none';
@@ -182,7 +205,7 @@
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracking })
+          body: JSON.stringify({ tracking, carrier })
         }
       );
 
@@ -194,13 +217,10 @@
       const data = Array.isArray(raw) ? raw[0] : raw;
 
       statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
-      
-      const carrier =
-        !data.carrier || data.carrier === 'UNKNOWN'
-        ? 'Not detected yet'
-        : data.carrier;
-
-      courierEl.textContent = `Carrier: ${carrier}`;
+      courierEl.textContent =
+        `Carrier: ${data.carrier && data.carrier !== 'UNKNOWN'
+          ? data.carrier
+          : 'Not detected yet'}`;
 
       if (Array.isArray(data.events) && data.events.length > 0) {
         data.events.forEach(e => {
@@ -216,9 +236,8 @@
         eventsEl.innerHTML = `
           <div class="muted">
             No tracking events available yet.<br />
-            Tracking updates usually appear after the first scan by the courier.
-      </div>
-      `;
+            Updates usually appear after the first courier scan.
+          </div>`;
       }
 
       resultEl.style.display = 'block';
