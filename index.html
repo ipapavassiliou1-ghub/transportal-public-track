@@ -130,7 +130,8 @@
   <div class="container">
     <h1>📦 Track your shipment</h1>
     <p class="subtitle">
-      Enter your tracking number to see the latest shipment status.
+      Enter your tracking number.  
+      If you know the carrier, selecting it may improve accuracy.
     </p>
 
     <div class="card">
@@ -144,7 +145,14 @@
 
       <label for="carrierSelect">Carrier (optional)</label>
       <select id="carrierSelect">
-        <option value="AUTO">Auto (recommended)</option>
+        <option value="AUTO" selected>Auto (recommended)</option>
+
+        <!-- International -->
+        <option value="UPS">UPS</option>
+        <option value="DHL">DHL</option>
+        <option value="FEDEX">FedEx</option>
+
+        <!-- Greece -->
         <option value="ELTA">ELTA</option>
         <option value="ACS">ACS</option>
         <option value="GENIKI">Geniki Taxydromiki</option>
@@ -153,7 +161,7 @@
       </select>
 
       <div class="helper">
-        If you know the carrier, selecting it may improve results.
+        Leave on Auto unless you are sure about the courier.
       </div>
 
       <button id="trackBtn">Track shipment</button>
@@ -217,10 +225,13 @@
       const data = Array.isArray(raw) ? raw[0] : raw;
 
       statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
+
       courierEl.textContent =
-        `Carrier: ${data.carrier && data.carrier !== 'UNKNOWN'
-          ? data.carrier
-          : 'Not detected yet'}`;
+        `Carrier: ${
+          data.carrier && data.carrier !== 'UNKNOWN'
+            ? data.carrier
+            : 'Not detected yet'
+        }`;
 
       if (Array.isArray(data.events) && data.events.length > 0) {
         data.events.forEach(e => {
