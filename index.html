@@ -245,7 +245,11 @@
       const text = await response.text();
 
       if (!text || !text.trim()) {
-        throw new Error('Empty response body');
+      console.warn('Empty response body (ignored)');
+      trackBtn.disabled = false;
+      trackBtn.textContent = 'Track shipment';
+      return;
+    }
       }
 
       let raw;
