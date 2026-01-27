@@ -228,9 +228,13 @@ trackBtn.addEventListener('click', async () => {
       const div = document.createElement('div');
       div.className = 'event';
       div.innerHTML = `
-        <div><strong>${e.status}</strong></div>
-        <div class="muted">${e.description || ''}</div>
-      `;
+      <div><strong>${e.status || 'Update'}</strong></div>
+      <div class="muted">
+      ${e.datetime ? new Date(e.datetime).toLocaleString() : ''}
+      ${e.location ? ' • ' + e.location : ''}
+      </div>
+      ${e.description ? `<div class="muted">${e.description}</div>` : ''}
+`     ;
       eventsEl.appendChild(div);
     });
   } else {
