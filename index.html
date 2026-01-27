@@ -171,6 +171,7 @@ trackBtn.addEventListener('click', async () => {
   const carrier = carrierSelect.value;
 
   errorEl.style.display = 'none';
+  errorEl.textContent = '';
   resultEl.style.display = 'none';
   eventsEl.innerHTML = '';
 
@@ -183,83 +184,61 @@ trackBtn.addEventListener('click', async () => {
   trackBtn.disabled = true;
   trackBtn.textContent = 'Tracking…';
 
-  let response;
-  try {
-    response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tracking, carrier }),
-    });
-  } catch (e) {
-    errorEl.textContent = 'Unable to reach tracking service.';
-    errorEl.style.display = 'block';
-    trackBtn.disabled = false;
-    trackBtn.textContent = 'Track shipment';
-    return;
-  }
-
-  if (!response.ok) {
-    errorEl.textContent = 'Unable to retrieve tracking information.';
-    errorEl.style.display = 'block';
-    trackBtn.disabled = false;
-    trackBtn.textContent = 'Track shipment';
-    return;
-  }
-
-  let text = await response.text();
-
-  // Retry ONCE if empty body
-  if (!text || !text.trim()) {
-    console.warn('Empty response body, retrying once…');
-  
-    response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tracking, carrier }),
-    });
-  
-    text = await response.text();
-  }
-  
-  // If still empty → real backend issue
-  if (!text || !text.trim()) {
-    errorEl.textContent =
-      'Tracking information is temporarily unavailable. Please try again.';
-    errorEl.style.display = 'block';
-    trackBtn.disabled = false;
-    trackBtn.textContent = 'Track shipment';
-    return;
-  }
-
   let data;
+
   try {
-    const raw = JSON.parse(text);
-    data = Array.isArray(raw) ? raw[0] : raw;
-  } catch {
-    errorEl.textContent = 'Invalid response from server.';
+    const response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking, carrier }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    data = await response.json();   // <-- SAFE because backend MUST return JSON
+    if (Array.isArray(data)) data = data[0];
+
+  } catch (err) {
+    console.error('Tracking UI error:', err);
+    errorEl.textContent =
+      'Unable to retrieve tracking information. Please try again later.';
     errorEl.style.display = 'block';
     trackBtn.disabled = false;
     trackBtn.textContent = 'Track shipment';
     return;
   }
 
-  if (typeof data.error === 'string') {
+  if (typeof data.error === 'string' && data.error.length > 0) {
     errorEl.textContent = data.error;
     errorEl.style.display = 'block';
   }
 
   statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
-  courierEl.textContent = `Carrier: ${data.carrier || 'Unknown'}`;
+  courierEl.textContent =
+    `Carrier: ${
+      data.carrier && data.carrier !== 'UNKNOWN'
+        ? data.carrier
+        : 'Not detected yet'
+    }`;
 
-  if (Array.isArray(data.events) && data.events.length) {
+  if (Array.isArray(data.events) && data.events.length > 0) {
     data.events.forEach(e => {
       const div = document.createElement('div');
       div.className = 'event';
-      div.innerHTML = `<strong>${e.status}</strong><br>${e.description || ''}`;
+      div.innerHTML = `
+        <div><strong>${e.status}</strong></div>
+        <div class="muted">${e.description || ''}</div>
+      `;
       eventsEl.appendChild(div);
     });
   } else {
-    eventsEl.innerHTML = `<div class="muted">No tracking events available yet.</div>`;
+    eventsEl.innerHTML = `
+      <div class="muted">
+        No tracking events available yet.<br />
+        Updates usually appear after the first courier scan.
+      </div>`;
   }
 
   resultEl.style.display = 'block';
