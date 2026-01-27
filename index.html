@@ -240,8 +240,24 @@
     
     // ---------- SAFE JSON parsing ----------
     try {
-      const raw = await response.json();
-      data = Array.isArray(raw) ? raw[0] : raw;
+      const text = await response.text();
+
+    // If the backend returned nothing, show a clear message and stop
+    if (!text || !text.trim()) {
+      throw new Error('Empty response body');
+    }
+    
+    // Try parsing JSON safely
+    let raw;
+    try {
+      raw = JSON.parse(text);
+    } catch (e) {
+      console.error('Non-JSON response body:', text);
+      throw new Error('Invalid JSON response');
+    }
+    
+    const data = Array.isArray(raw) ? raw[0] : raw;
+    
     } catch (err) {
       // 🔴 Parsing failed, but request succeeded
       console.warn('JSON parse error, ignoring response:', err);
