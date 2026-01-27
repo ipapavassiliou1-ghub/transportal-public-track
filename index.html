@@ -194,7 +194,7 @@
     const tracking = trackingInput.value.trim();
     const carrier = carrierSelect.value;
 
-    // reset UI
+    // Reset UI
     errorEl.style.display = 'none';
     errorEl.textContent = '';
     resultEl.style.display = 'none';
@@ -210,83 +210,79 @@
     trackBtn.textContent = 'Tracking…';
 
     let response;
-    let data;
-    
+
+    // 1) Network call (only network errors here)
     try {
-      response = await fetch(
-        'https://api.transportal.gr/webhook/track-mvp',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracking, carrier })
-        }
-      );
+      response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracking, carrier }),
+      });
     } catch (err) {
-      // 🔴 Network failure ONLY
       console.error('Network error:', err);
       errorEl.textContent =
         'Unable to reach tracking service. Please try again later.';
       errorEl.style.display = 'block';
+      trackBtn.disabled = false;
+      trackBtn.textContent = 'Track shipment';
       return;
     }
-    
-    // ---------- HTTP-level check ----------
+
+    // 2) HTTP status check
     if (!response.ok) {
+      console.error('HTTP error:', response.status);
       errorEl.textContent =
         'Unable to retrieve tracking information. Please try again later.';
       errorEl.style.display = 'block';
+      trackBtn.disabled = false;
+      trackBtn.textContent = 'Track shipment';
       return;
     }
-    
-    // ---------- SAFE JSON parsing ----------
+
+    // 3) Safe parse (handles empty/truncated/non-JSON bodies)
+    let data;
     try {
       const text = await response.text();
 
-    // If the backend returned nothing, show a clear message and stop
-    if (!text || !text.trim()) {
-      throw new Error('Empty response body');
-    }
-    
-    // Try parsing JSON safely
-    let raw;
-    try {
-      raw = JSON.parse(text);
-    } catch (e) {
-      console.error('Non-JSON response body:', text);
-      throw new Error('Invalid JSON response');
-    }
-    
-    const data = Array.isArray(raw) ? raw[0] : raw;
-    
+      if (!text || !text.trim()) {
+        throw new Error('Empty response body');
+      }
+
+      let raw;
+      try {
+        raw = JSON.parse(text);
+      } catch (e) {
+        console.error('Non-JSON response body:', text);
+        throw new Error('Invalid JSON response');
+      }
+
+      data = Array.isArray(raw) ? raw[0] : raw;
     } catch (err) {
-      // 🔴 Parsing failed, but request succeeded
-      console.warn('JSON parse error, ignoring response:', err);
+      console.error('Tracking UI parse error:', err);
       errorEl.textContent =
-        'Tracking information is temporarily unavailable.';
+        'Tracking information is temporarily unavailable. Please try again.';
       errorEl.style.display = 'block';
+      trackBtn.disabled = false;
+      trackBtn.textContent = 'Track shipment';
       return;
     }
-    
-    // ---------- From here on, NO catch ----------
-    
-    // Soft backend warning
+
+    // 4) Render backend warning (soft warning)
     if (typeof data.error === 'string' && data.error.length > 0) {
       errorEl.textContent = data.error;
       errorEl.style.display = 'block';
     }
-    
-    // Render status
+
+    // 5) Render result
     statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
+
     courierEl.textContent =
       `Carrier: ${
         data.carrier && data.carrier !== 'UNKNOWN'
           ? data.carrier
           : 'Not detected yet'
       }`;
-    
-    // Render events
-    eventsEl.innerHTML = '';
-    
+
     if (Array.isArray(data.events) && data.events.length > 0) {
       data.events.forEach(e => {
         const div = document.createElement('div');
@@ -294,7 +290,7 @@
         div.innerHTML = `
           <div><strong>${e.status || 'Update'}</strong></div>
           <div class="muted">
-            ${e.datetime || ''} ${e.location || ''}<br/>
+            ${e.datetime || ''} ${e.location || ''}<br />
             ${e.description || ''}
           </div>
         `;
@@ -308,17 +304,11 @@
         </div>`;
     }
 
-resultEl.style.display = 'block';
+    resultEl.style.display = 'block';
 
-    } catch (err) {
-      console.error('Tracking UI error:', err);
-      errorEl.textContent =
-        'Unable to retrieve tracking information. Please try again later.';
-      errorEl.style.display = 'block';
-    } finally {
-      trackBtn.disabled = false;
-      trackBtn.textContent = 'Track shipment';
-    }
+    // Done
+    trackBtn.disabled = false;
+    trackBtn.textContent = 'Track shipment';
   });
 </script>
 
