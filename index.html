@@ -223,7 +223,17 @@
 
       const raw = await response.json();
       const data = Array.isArray(raw) ? raw[0] : raw;
-
+      
+      // ----------------------------------
+      // Show backend warning (carrier mismatch)
+      // ----------------------------------
+      if (typeof data.error === 'string' && data.error.length > 0) {
+      errorEl.textContent = data.error;
+      errorEl.style.display = 'block';
+      } else {
+      errorEl.style.display = 'none';
+      }
+      
       statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
 
       courierEl.textContent =
