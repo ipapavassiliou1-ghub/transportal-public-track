@@ -206,9 +206,26 @@ trackBtn.addEventListener('click', async () => {
     return;
   }
 
-  const text = await response.text();
+  let text = await response.text();
+
+  // Retry ONCE if empty body
   if (!text || !text.trim()) {
-    // VALID: ignore empty body
+    console.warn('Empty response body, retrying once…');
+  
+    response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tracking, carrier }),
+    });
+  
+    text = await response.text();
+  }
+  
+  // If still empty → real backend issue
+  if (!text || !text.trim()) {
+    errorEl.textContent =
+      'Tracking information is temporarily unavailable. Please try again.';
+    errorEl.style.display = 'block';
     trackBtn.disabled = false;
     trackBtn.textContent = 'Track shipment';
     return;
