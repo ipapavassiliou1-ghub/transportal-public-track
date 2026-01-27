@@ -224,12 +224,14 @@
       }
 
       // ✅ SAFE JSON PARSE
-      const text = await response.text();
-      if (!text) {
-        throw new Error('Empty response body');
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!contentType.includes('application/json')) {
+      // Ignore empty / non-JSON responses (e.g. CORS preflight)
+      return;
       }
 
-      const raw = JSON.parse(text);
+      const raw = await response.json();
       const data = Array.isArray(raw) ? raw[0] : raw;
 
       // ----------------------------------
