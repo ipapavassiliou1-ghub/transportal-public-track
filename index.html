@@ -206,7 +206,8 @@ trackBtn.addEventListener('click', async () => {
   trackBtn.textContent = 'Processing…';
 
   try {
-    // -------------------
+
+// -------------------
 // BATCH MODE
 // -------------------
 if (file) {
@@ -225,23 +226,28 @@ if (file) {
     throw new Error(`HTTP ${response.status}`);
   }
 
-  // ⬇️ IMPORTANT: read as BLOB, not JSON
+  // Read response as binary (CSV file)
   const blob = await response.blob();
 
-  // Create download link
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'tracking-results.csv'; // must match Convert to File name
-  document.body.appendChild(a);
-  a.click();
+  // Create object URL for later download
+  const downloadUrl = window.URL.createObjectURL(blob);
 
-  // Cleanup
-  a.remove();
-  window.URL.revokeObjectURL(url);
+  // Configure download button (manual download)
+  downloadBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = 'tracking-results.csv'; // filename shown to user
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
 
-  // Optional UI feedback
+    // Cleanup AFTER download
+    window.URL.revokeObjectURL(downloadUrl);
+  };
+
+  // UI feedback
   batchSummary.textContent = 'Batch processed successfully.';
+  downloadBtn.style.display = 'block';
   resultBatch.style.display = 'block';
 }
 
