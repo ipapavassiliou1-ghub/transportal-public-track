@@ -118,6 +118,12 @@
       font-weight: 600;
       margin-top: 16px;
     }
+
+    hr {
+      margin: 32px 0;
+      border: none;
+      border-top: 1px solid #e5e7eb;
+    }
   </style>
 </head>
 <body>
@@ -129,7 +135,8 @@
   </p>
 
   <div class="card">
-    <!-- SINGLE INPUT -->
+
+    <!-- SINGLE TRACKING -->
     <label>Tracking number</label>
     <input id="trackingInput" placeholder="e.g. 1Z999AA10123456784" />
 
@@ -144,12 +151,20 @@
     </select>
 
     <div class="helper">
-      You can also upload a CSV or Excel file to track multiple shipments.
+      Leave empty if unsure — auto-detection works well.
     </div>
 
-    <!-- BATCH INPUT -->
+    <hr />
+
+    <!-- BATCH TRACKING -->
     <label>Batch upload (CSV or Excel)</label>
     <input id="batchFile" type="file" accept=".csv,.xlsx" />
+
+    <label>Export format</label>
+    <select id="exportFormat">
+      <option value="csv" selected>CSV</option>
+      <option value="xlsx">Excel (.xlsx)</option>
+    </select>
 
     <button id="trackBtn">Track shipments</button>
 
@@ -169,6 +184,7 @@
         Download results
       </button>
     </div>
+
   </div>
 </div>
 
@@ -177,6 +193,7 @@ const trackBtn = document.getElementById('trackBtn');
 const trackingInput = document.getElementById('trackingInput');
 const carrierSelect = document.getElementById('carrierSelect');
 const batchFileInput = document.getElementById('batchFile');
+const exportFormatSelect = document.getElementById('exportFormat');
 
 const errorEl = document.getElementById('error');
 
@@ -193,8 +210,8 @@ trackBtn.addEventListener('click', async () => {
   const tracking = trackingInput.value.trim();
   const carrier = carrierSelect.value;
   const file = batchFileInput.files[0];
+  const exportFormat = exportFormatSelect.value;
 
-  // Reset UI
   errorEl.style.display = 'none';
   errorEl.textContent = '';
   resultSingle.style.display = 'none';
@@ -207,49 +224,47 @@ trackBtn.addEventListener('click', async () => {
 
   try {
 
-// -------------------
-// BATCH MODE
-// -------------------
-if (file) {
-  const formData = new FormData();
-  formData.append('file', file);
+    // -------------------
+    // BATCH MODE
+    // -------------------
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('format', exportFormat); // <-- important
 
-  const response = await fetch(
-    'https://api.transportal.gr/webhook/track-batch',
-    {
-      method: 'POST',
-      body: formData,
+      const response = await fetch(
+        'https://api.transportal.gr/webhook/track-batch',
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      downloadBtn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download =
+          exportFormat === 'xlsx'
+            ? 'tracking-results.xlsx'
+            : 'tracking-results.csv';
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+      };
+
+      batchSummary.textContent = 'Batch processed successfully.';
+      downloadBtn.style.display = 'block';
+      resultBatch.style.display = 'block';
     }
-  );
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  // Read response as binary (CSV file)
-  const blob = await response.blob();
-
-  // Create object URL for later download
-  const downloadUrl = window.URL.createObjectURL(blob);
-
-  // Configure download button (manual download)
-  downloadBtn.onclick = () => {
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = 'tracking-results.csv'; // filename shown to user
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    // Cleanup AFTER download
-    window.URL.revokeObjectURL(downloadUrl);
-  };
-
-  // UI feedback
-  batchSummary.textContent = 'Batch processed successfully.';
-  downloadBtn.style.display = 'block';
-  resultBatch.style.display = 'block';
-}
 
     // -------------------
     // SINGLE MODE
@@ -312,6 +327,7 @@ if (file) {
 
       resultSingle.style.display = 'block';
     }
+
   } catch (err) {
     console.error(err);
     errorEl.textContent =
