@@ -237,7 +237,7 @@ trackBtn.addEventListener('click', async () => {
     if (file) {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('format', exportFormat); // <-- important
+      formData.append('export_format', exportFormat);
 
       const response = await fetch(
         'https://api.transportal.gr/webhook/track-batch',
