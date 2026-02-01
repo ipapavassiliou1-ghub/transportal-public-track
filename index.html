@@ -75,6 +75,12 @@
       cursor: pointer;
     }
 
+    button.secondary {
+      margin-top: 12px;
+      background: #eef2ff;
+      color: var(--primary);
+    }
+
     button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -112,13 +118,6 @@
       font-weight: 600;
       margin-top: 16px;
     }
-
-    footer {
-      margin-top: 48px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 14px;
-    }
   </style>
 </head>
 <body>
@@ -126,13 +125,13 @@
 <div class="container">
   <h1>📦 Track your shipment</h1>
   <p class="subtitle">
-    Enter your tracking number.
-    If you know the carrier, selecting it may improve accuracy.
+    Enter a tracking number or upload a file to track multiple shipments.
   </p>
 
   <div class="card">
+    <!-- SINGLE INPUT -->
     <label>Tracking number</label>
-    <input id="trackingInput" />
+    <input id="trackingInput" placeholder="e.g. 1Z999AA10123456784" />
 
     <label>Carrier (optional)</label>
     <select id="carrierSelect">
@@ -144,14 +143,31 @@
       <option value="ACS">ACS</option>
     </select>
 
-    <button id="trackBtn">Track shipment</button>
+    <div class="helper">
+      You can also upload a CSV or Excel file to track multiple shipments.
+    </div>
+
+    <!-- BATCH INPUT -->
+    <label>Batch upload (CSV or Excel)</label>
+    <input id="batchFile" type="file" accept=".csv,.xlsx" />
+
+    <button id="trackBtn">Track shipments</button>
 
     <div id="error" class="error" style="display:none;"></div>
 
-    <div id="result" class="result" style="display:none;">
+    <!-- SINGLE RESULT -->
+    <div id="resultSingle" class="result" style="display:none;">
       <div id="status" class="status"></div>
       <div id="courier" class="muted"></div>
       <div id="events" style="margin-top:16px;"></div>
+    </div>
+
+    <!-- BATCH RESULT -->
+    <div id="resultBatch" class="result" style="display:none;">
+      <div class="status" id="batchSummary"></div>
+      <button id="downloadBtn" class="secondary" style="display:none;">
+        Download results
+      </button>
     </div>
   </div>
 </div>
@@ -160,94 +176,140 @@
 const trackBtn = document.getElementById('trackBtn');
 const trackingInput = document.getElementById('trackingInput');
 const carrierSelect = document.getElementById('carrierSelect');
-const resultEl = document.getElementById('result');
+const batchFileInput = document.getElementById('batchFile');
+
+const errorEl = document.getElementById('error');
+
+const resultSingle = document.getElementById('resultSingle');
 const statusEl = document.getElementById('status');
 const courierEl = document.getElementById('courier');
 const eventsEl = document.getElementById('events');
-const errorEl = document.getElementById('error');
+
+const resultBatch = document.getElementById('resultBatch');
+const batchSummary = document.getElementById('batchSummary');
+const downloadBtn = document.getElementById('downloadBtn');
 
 trackBtn.addEventListener('click', async () => {
   const tracking = trackingInput.value.trim();
   const carrier = carrierSelect.value;
+  const file = batchFileInput.files[0];
 
+  // Reset UI
   errorEl.style.display = 'none';
   errorEl.textContent = '';
-  resultEl.style.display = 'none';
+  resultSingle.style.display = 'none';
+  resultBatch.style.display = 'none';
   eventsEl.innerHTML = '';
-
-  if (!tracking) {
-    errorEl.textContent = 'Please enter a tracking number.';
-    errorEl.style.display = 'block';
-    return;
-  }
+  downloadBtn.style.display = 'none';
 
   trackBtn.disabled = true;
-  trackBtn.textContent = 'Tracking…';
-
-  let data;
+  trackBtn.textContent = 'Processing…';
 
   try {
-    const response = await fetch('https://api.transportal.gr/webhook/track-mvp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tracking, carrier }),
-    });
+    // -------------------
+    // BATCH MODE
+    // -------------------
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const response = await fetch(
+        'https://api.transportal.gr/webhook/track-batch',
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      batchSummary.textContent =
+        `${data.count || 'Multiple'} shipments processed successfully.`;
+
+      if (data.download_url) {
+        downloadBtn.onclick = () => {
+          window.location.href = data.download_url;
+        };
+        downloadBtn.style.display = 'block';
+      }
+
+      resultBatch.style.display = 'block';
     }
 
-    data = await response.json();   // <-- SAFE because backend MUST return JSON
-    if (Array.isArray(data)) data = data[0];
+    // -------------------
+    // SINGLE MODE
+    // -------------------
+    else {
+      if (!tracking) {
+        throw new Error('Please enter a tracking number or upload a file.');
+      }
 
+      const response = await fetch(
+        'https://api.transportal.gr/webhook/track-mvp',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tracking, carrier }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      let data = await response.json();
+      if (Array.isArray(data)) data = data[0];
+
+      if (typeof data.error === 'string' && data.error.length > 0) {
+        errorEl.textContent = data.error;
+        errorEl.style.display = 'block';
+      }
+
+      statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
+      courierEl.textContent =
+        `Carrier: ${
+          data.carrier && data.carrier !== 'UNKNOWN'
+            ? data.carrier
+            : 'Not detected yet'
+        }`;
+
+      if (Array.isArray(data.events) && data.events.length > 0) {
+        data.events.forEach(e => {
+          const div = document.createElement('div');
+          div.className = 'event';
+          div.innerHTML = `
+            <div><strong>${e.status || 'Update'}</strong></div>
+            <div class="muted">
+              ${e.datetime ? new Date(e.datetime).toLocaleString() : ''}
+              ${e.location ? ' • ' + e.location : ''}
+            </div>
+            ${e.description ? `<div class="muted">${e.description}</div>` : ''}
+          `;
+          eventsEl.appendChild(div);
+        });
+      } else {
+        eventsEl.innerHTML = `
+          <div class="muted">
+            No tracking events available yet.<br />
+            Updates usually appear after the first courier scan.
+          </div>`;
+      }
+
+      resultSingle.style.display = 'block';
+    }
   } catch (err) {
-    console.error('Tracking UI error:', err);
+    console.error(err);
     errorEl.textContent =
-      'Unable to retrieve tracking information. Please try again later.';
+      err.message || 'Unable to process your request.';
     errorEl.style.display = 'block';
+  } finally {
     trackBtn.disabled = false;
-    trackBtn.textContent = 'Track shipment';
-    return;
+    trackBtn.textContent = 'Track shipments';
   }
-
-  if (typeof data.error === 'string' && data.error.length > 0) {
-    errorEl.textContent = data.error;
-    errorEl.style.display = 'block';
-  }
-
-  statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
-  courierEl.textContent =
-    `Carrier: ${
-      data.carrier && data.carrier !== 'UNKNOWN'
-        ? data.carrier
-        : 'Not detected yet'
-    }`;
-
-  if (Array.isArray(data.events) && data.events.length > 0) {
-    data.events.forEach(e => {
-      const div = document.createElement('div');
-      div.className = 'event';
-      div.innerHTML = `
-      <div><strong>${e.status || 'Update'}</strong></div>
-      <div class="muted">
-      ${e.datetime ? new Date(e.datetime).toLocaleString() : ''}
-      ${e.location ? ' • ' + e.location : ''}
-      </div>
-      ${e.description ? `<div class="muted">${e.description}</div>` : ''}
-`     ;
-      eventsEl.appendChild(div);
-    });
-  } else {
-    eventsEl.innerHTML = `
-      <div class="muted">
-        No tracking events available yet.<br />
-        Updates usually appear after the first courier scan.
-      </div>`;
-  }
-
-  resultEl.style.display = 'block';
-  trackBtn.disabled = false;
-  trackBtn.textContent = 'Track shipment';
 });
 </script>
 
