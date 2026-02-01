@@ -207,38 +207,43 @@ trackBtn.addEventListener('click', async () => {
 
   try {
     // -------------------
-    // BATCH MODE
-    // -------------------
-    if (file) {
-      const formData = new FormData();
-      formData.append('file', file);
+// BATCH MODE
+// -------------------
+if (file) {
+  const formData = new FormData();
+  formData.append('file', file);
 
-      const response = await fetch(
-        'https://api.transportal.gr/webhook/track-batch',
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      batchSummary.textContent =
-        `${data.count || 'Multiple'} shipments processed successfully.`;
-
-      if (data.download_url) {
-        downloadBtn.onclick = () => {
-          window.location.href = data.download_url;
-        };
-        downloadBtn.style.display = 'block';
-      }
-
-      resultBatch.style.display = 'block';
+  const response = await fetch(
+    'https://api.transportal.gr/webhook/track-batch',
+    {
+      method: 'POST',
+      body: formData,
     }
+  );
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  // ⬇️ IMPORTANT: read as BLOB, not JSON
+  const blob = await response.blob();
+
+  // Create download link
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'tracking-results.csv'; // must match Convert to File name
+  document.body.appendChild(a);
+  a.click();
+
+  // Cleanup
+  a.remove();
+  window.URL.revokeObjectURL(url);
+
+  // Optional UI feedback
+  batchSummary.textContent = 'Batch processed successfully.';
+  resultBatch.style.display = 'block';
+}
 
     // -------------------
     // SINGLE MODE
