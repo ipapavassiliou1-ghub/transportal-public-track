@@ -84,13 +84,6 @@
 
     button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    .helper {
-      font-size: 13px;
-      color: var(--muted);
-      margin-top: -8px;
-      margin-bottom: 16px;
-    }
-
     .modeToggle {
       display: flex;
       gap: 16px;
@@ -107,7 +100,11 @@
     }
 
     .result { margin-top: 24px; }
-    .status { font-weight: 800; }
+
+    .status {
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
 
     .event {
       border-left: 3px solid var(--primary);
@@ -115,7 +112,31 @@
       margin-bottom: 12px;
     }
 
-    .error { color: var(--error); font-weight: 600; }
+    .error {
+      color: var(--error);
+      font-weight: 600;
+      margin-top: 16px;
+    }
+
+    /* Skeleton */
+    .skeleton {
+      height: 14px;
+      background: linear-gradient(
+        90deg,
+        #eee 25%,
+        #f5f5f5 37%,
+        #eee 63%
+      );
+      background-size: 400% 100%;
+      animation: shimmer 1.4s ease infinite;
+      border-radius: 6px;
+      margin-top: 12px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
 
     footer {
       margin-top: auto;
@@ -136,62 +157,27 @@
 
   <div>
     <h1>📦 Track your shipment</h1>
-    <p class="subtitle">
-      Track a single shipment or upload a file for batch tracking.
-    </p>
+    <p class="subtitle">Track a single shipment or upload a file for batch tracking.</p>
   </div>
 
   <div class="card">
 
-    <!-- MODE TOGGLE -->
+    <!-- MODE -->
     <div class="modeToggle">
-      <label>
-        <input type="radio" name="mode" value="single" checked />
-        Single tracking
-      </label>
-      <label>
-        <input type="radio" name="mode" value="batch" />
-        Batch tracking
-      </label>
+      <label><input type="radio" name="mode" value="single" checked /> Single</label>
+      <label><input type="radio" name="mode" value="batch" /> Batch</label>
     </div>
 
     <!-- SINGLE -->
     <div id="singleSection">
       <h2>Single tracking</h2>
-
-      <div class="modeToggle">
-        <label>
-          <input type="radio" name="singleMode" value="tracking" checked />
-          Tracking number
-        </label>
-        <label>
-          <input type="radio" name="singleMode" value="reference" />
-          Reference
-        </label>
-      </div>
-
-      <label id="singleLabel">Tracking number</label>
+      <label>Tracking number or reference</label>
       <input id="singleInput" placeholder="e.g. 1Z999AA10123456784" />
-
-      <label>Carrier (optional)</label>
-      <select id="carrierSelect">
-        <option value="AUTO">Auto (recommended)</option>
-        <option value="UPS">UPS</option>
-        <option value="DHL">DHL</option>
-        <option value="FEDEX">FedEx</option>
-        <option value="ELTA">ELTA</option>
-        <option value="ACS">ACS</option>
-      </select>
-
-      <div class="helper" id="singleHelper">
-        Leave empty if unsure — auto-detection works well.
-      </div>
     </div>
 
     <!-- BATCH -->
     <div id="batchSection" style="display:none;">
       <h2>Batch tracking</h2>
-
       <label>Upload file (CSV or Excel)</label>
       <input id="batchFile" type="file" accept=".csv,.xlsx" />
 
@@ -204,14 +190,12 @@
 
     <button id="trackBtn">Track shipments</button>
 
-    <div id="error" class="error" style="display:none;"></div>
-
-    <!-- SINGLE RESULT -->
-    <div id="resultSingle" class="result" style="display:none;">
-      <div id="status" class="status"></div>
-      <div id="courier" class="muted"></div>
-      <div id="events" style="margin-top:16px;"></div>
+    <div id="loading" style="display:none;">
+      <div class="skeleton"></div>
+      <div class="skeleton" style="width:70%;"></div>
     </div>
+
+    <div id="error" class="error" style="display:none;"></div>
 
     <!-- BATCH RESULT -->
     <div id="resultBatch" class="result" style="display:none;">
@@ -229,27 +213,20 @@
 </div>
 
 <script>
-const trackBtn = document.getElementById('trackBtn');
-const errorEl = document.getElementById('error');
-
+const modeRadios = document.querySelectorAll('input[name="mode"]');
 const singleSection = document.getElementById('singleSection');
 const batchSection = document.getElementById('batchSection');
-const modeRadios = document.querySelectorAll('input[name="mode"]');
 
-const singleInput = document.getElementById('singleInput');
-const carrierSelect = document.getElementById('carrierSelect');
-const batchFileInput = document.getElementById('batchFile');
-const exportFormatSelect = document.getElementById('exportFormat');
-
-const resultSingle = document.getElementById('resultSingle');
-const statusEl = document.getElementById('status');
-const courierEl = document.getElementById('courier');
-const eventsEl = document.getElementById('events');
+const trackBtn = document.getElementById('trackBtn');
+const batchFile = document.getElementById('batchFile');
+const exportFormat = document.getElementById('exportFormat');
+const loading = document.getElementById('loading');
 
 const resultBatch = document.getElementById('resultBatch');
 const batchSummary = document.getElementById('batchSummary');
 const downloadBtn = document.getElementById('downloadBtn');
 const clearBtn = document.getElementById('clearBtn');
+const errorEl = document.getElementById('error');
 
 let mode = 'single';
 
@@ -263,37 +240,39 @@ modeRadios.forEach(r => {
 
 trackBtn.addEventListener('click', async () => {
   errorEl.style.display = 'none';
-  resultSingle.style.display = 'none';
   resultBatch.style.display = 'none';
+  loading.style.display = 'block';
 
   trackBtn.disabled = true;
   trackBtn.textContent = 'Processing…';
 
   try {
     if (mode === 'batch') {
-      const file = batchFileInput.files[0];
-      if (!file) throw new Error('Please upload a file.');
+      if (!batchFile.files[0]) throw new Error('Please upload a file.');
 
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('export_format', exportFormatSelect.value);
+      formData.append('file', batchFile.files[0]);
+      formData.append('export_format', exportFormat.value);
 
-      const res = await fetch(
-        'https://api.transportal.gr/webhook/track-batch',
-        { method: 'POST', body: formData }
-      );
+      const res = await fetch('https://api.transportal.gr/webhook/track-batch', {
+        method: 'POST',
+        body: formData,
+      });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
 
-      batchSummary.textContent = 'Batch processed successfully.';
+      // Live summary (safe default)
+      batchSummary.textContent =
+        'Batch processed · download ready';
+
       downloadBtn.onclick = () => {
         const a = document.createElement('a');
         a.href = url;
         a.download =
-          exportFormatSelect.value === 'xlsx'
+          exportFormat.value === 'xlsx'
             ? 'tracking-results.xlsx'
             : 'tracking-results.csv';
         document.body.appendChild(a);
@@ -303,55 +282,19 @@ trackBtn.addEventListener('click', async () => {
       };
 
       resultBatch.style.display = 'block';
-      return;
     }
-
-    const value = singleInput.value.trim();
-    if (!value) throw new Error('Please enter a tracking number or reference.');
-
-    const res = await fetch(
-      'https://api.transportal.gr/webhook/track-mvp',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tracking: value, carrier: carrierSelect.value }),
-      }
-    );
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    let data = await res.json();
-    if (Array.isArray(data)) data = data[0];
-
-    statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
-    courierEl.textContent = `Carrier: ${data.carrier || 'Unknown'}`;
-
-    eventsEl.innerHTML = '';
-    if (Array.isArray(data.events)) {
-      data.events.forEach(e => {
-        const div = document.createElement('div');
-        div.className = 'event';
-        div.innerHTML = `
-          <div><strong>${e.status}</strong></div>
-          <div class="muted">${new Date(e.datetime).toLocaleString()}</div>
-        `;
-        eventsEl.appendChild(div);
-      });
-    }
-
-    resultSingle.style.display = 'block';
-
   } catch (err) {
     errorEl.textContent = err.message || 'Something went wrong.';
     errorEl.style.display = 'block';
   } finally {
+    loading.style.display = 'none';
     trackBtn.disabled = false;
     trackBtn.textContent = 'Track shipments';
   }
 });
 
 clearBtn.onclick = () => {
-  batchFileInput.value = '';
+  batchFile.value = '';
   resultBatch.style.display = 'none';
 };
 </script>
