@@ -41,6 +41,11 @@
       margin: 0 0 8px 0;
     }
 
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px 0;
+    }
+
     p.subtitle {
       color: var(--muted);
       margin: 0;
@@ -166,6 +171,7 @@
 <body>
 
 <div class="container">
+
   <div>
     <h1>📦 Track your shipment</h1>
     <p class="subtitle">
@@ -175,7 +181,9 @@
 
   <div class="card">
 
-    <!-- SINGLE MODE TOGGLE -->
+    <!-- SINGLE TRACKING -->
+    <h2>Single tracking</h2>
+
     <div class="toggleRow">
       <label>
         <input type="radio" name="singleMode" value="tracking" checked />
@@ -206,11 +214,13 @@
 
     <hr />
 
-    <!-- BATCH -->
-    <label>Batch upload (CSV or Excel)</label>
+    <!-- BATCH TRACKING -->
+    <h2>Batch tracking</h2>
+
+    <label>Upload file (CSV or Excel)</label>
     <input id="batchFile" type="file" accept=".csv,.xlsx" />
 
-    <label>Export format</label>
+    <label>Download format</label>
     <select id="exportFormat">
       <option value="xlsx">Excel (XLSX)</option>
       <option value="csv">CSV</option>
@@ -240,6 +250,7 @@
   <footer>
     powered by <span class="brand">transportal</span>
   </footer>
+
 </div>
 
 <script>
@@ -296,21 +307,23 @@ trackBtn.addEventListener('click', async () => {
   trackBtn.textContent = 'Processing…';
 
   try {
+    // ---------- BATCH ----------
     if (file) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('export_format', exportFormat);
 
-      const res = await fetch('https://api.transportal.gr/webhook/track-batch', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch(
+        'https://api.transportal.gr/webhook/track-batch',
+        { method: 'POST', body: formData }
+      );
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
 
+      batchSummary.textContent = 'Batch processed successfully.';
       downloadBtn.onclick = () => {
         const a = document.createElement('a');
         a.href = url;
@@ -324,12 +337,12 @@ trackBtn.addEventListener('click', async () => {
         URL.revokeObjectURL(url);
       };
 
-      batchSummary.textContent = 'Batch processed successfully.';
       downloadBtn.style.display = 'block';
       resultBatch.style.display = 'block';
       return;
     }
 
+    // ---------- SINGLE ----------
     if (!value) throw new Error('Please enter a tracking number or reference.');
 
     const payload =
@@ -337,11 +350,14 @@ trackBtn.addEventListener('click', async () => {
         ? { tracking: value, carrier }
         : { reference: value, carrier };
 
-    const res = await fetch('https://api.transportal.gr/webhook/track-mvp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      'https://api.transportal.gr/webhook/track-mvp',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -350,9 +366,11 @@ trackBtn.addEventListener('click', async () => {
 
     statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
     courierEl.textContent =
-      `Carrier: ${data.carrier && data.carrier !== 'UNKNOWN'
-        ? data.carrier
-        : 'Not detected yet'}`;
+      `Carrier: ${
+        data.carrier && data.carrier !== 'UNKNOWN'
+          ? data.carrier
+          : 'Not detected yet'
+      }`;
 
     if (Array.isArray(data.events) && data.events.length) {
       data.events.forEach(e => {
@@ -360,12 +378,16 @@ trackBtn.addEventListener('click', async () => {
         div.className = 'event';
         div.innerHTML = `
           <div><strong>${e.status}</strong></div>
-          <div class="muted">${new Date(e.datetime).toLocaleString()}${e.location ? ' • ' + e.location : ''}</div>
+          <div class="muted">
+            ${new Date(e.datetime).toLocaleString()}
+            ${e.location ? ' • ' + e.location : ''}
+          </div>
         `;
         eventsEl.appendChild(div);
       });
     } else {
-      eventsEl.innerHTML = '<div class="muted">No tracking events yet.</div>';
+      eventsEl.innerHTML =
+        '<div class="muted">No tracking events yet.</div>';
     }
 
     resultSingle.style.display = 'block';
