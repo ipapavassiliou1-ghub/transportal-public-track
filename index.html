@@ -99,18 +99,33 @@
       color: var(--muted);
     }
 
-    .result { margin-top: 24px; }
-
-    .status {
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    .event {
-      border-left: 3px solid var(--primary);
-      padding-left: 12px;
+    .subToggle {
+      display: flex;
+      gap: 16px;
       margin-bottom: 12px;
     }
+
+    .subToggle label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .result {
+      margin-top: 24px;
+      opacity: 0;
+      transform: translateY(6px);
+      animation: fadeIn 0.25s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .status { font-weight: 800; margin-bottom: 6px; }
 
     .error {
       color: var(--error);
@@ -118,15 +133,9 @@
       margin-top: 16px;
     }
 
-    /* Skeleton */
     .skeleton {
       height: 14px;
-      background: linear-gradient(
-        90deg,
-        #eee 25%,
-        #f5f5f5 37%,
-        #eee 63%
-      );
+      background: linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%);
       background-size: 400% 100%;
       animation: shimmer 1.4s ease infinite;
       border-radius: 6px;
@@ -171,13 +180,19 @@
     <!-- SINGLE -->
     <div id="singleSection">
       <h2>Single tracking</h2>
-      <label>Tracking number or reference</label>
+
+      <div class="subToggle">
+        <label><input type="radio" name="singleType" value="tracking" checked /> Tracking</label>
+        <label><input type="radio" name="singleType" value="reference" /> Reference</label>
+      </div>
+
       <input id="singleInput" placeholder="e.g. 1Z999AA10123456784" />
     </div>
 
     <!-- BATCH -->
     <div id="batchSection" style="display:none;">
       <h2>Batch tracking</h2>
+
       <label>Upload file (CSV or Excel)</label>
       <input id="batchFile" type="file" accept=".csv,.xlsx" />
 
@@ -214,10 +229,12 @@
 
 <script>
 const modeRadios = document.querySelectorAll('input[name="mode"]');
+const typeRadios = document.querySelectorAll('input[name="singleType"]');
 const singleSection = document.getElementById('singleSection');
 const batchSection = document.getElementById('batchSection');
 
 const trackBtn = document.getElementById('trackBtn');
+const singleInput = document.getElementById('singleInput');
 const batchFile = document.getElementById('batchFile');
 const exportFormat = document.getElementById('exportFormat');
 const loading = document.getElementById('loading');
@@ -229,20 +246,30 @@ const clearBtn = document.getElementById('clearBtn');
 const errorEl = document.getElementById('error');
 
 let mode = 'single';
+let singleType = 'tracking';
 
-modeRadios.forEach(r => {
+modeRadios.forEach(r =>
   r.addEventListener('change', e => {
     mode = e.target.value;
     singleSection.style.display = mode === 'single' ? 'block' : 'none';
     batchSection.style.display = mode === 'batch' ? 'block' : 'none';
-  });
-});
+  })
+);
+
+typeRadios.forEach(r =>
+  r.addEventListener('change', e => {
+    singleType = e.target.value;
+    singleInput.placeholder =
+      singleType === 'tracking'
+        ? 'e.g. 1Z999AA10123456784'
+        : 'e.g. ORDER-12345';
+  })
+);
 
 trackBtn.addEventListener('click', async () => {
   errorEl.style.display = 'none';
   resultBatch.style.display = 'none';
   loading.style.display = 'block';
-
   trackBtn.disabled = true;
   trackBtn.textContent = 'Processing…';
 
@@ -261,12 +288,16 @@ trackBtn.addEventListener('click', async () => {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+      const total = res.headers.get('x-batch-total');
+      const delivered = res.headers.get('x-batch-delivered');
+      const pending = res.headers.get('x-batch-pending');
+
+      batchSummary.textContent = total
+        ? `${total} shipments processed · ${delivered || 0} delivered · ${pending || 0} pending`
+        : 'Batch processed · download ready';
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-
-      // Live summary (safe default)
-      batchSummary.textContent =
-        'Batch processed · download ready';
 
       downloadBtn.onclick = () => {
         const a = document.createElement('a');
