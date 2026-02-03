@@ -107,7 +107,6 @@
     }
 
     .result { margin-top: 24px; }
-
     .status { font-weight: 800; }
 
     .event {
@@ -117,26 +116,6 @@
     }
 
     .error { color: var(--error); font-weight: 600; }
-
-    .skeleton {
-      height: 14px;
-      width: 70%;
-      border-radius: 6px;
-      background: linear-gradient(90deg,#eee,#f5f5f5,#eee);
-      background-size: 200% 100%;
-      animation: pulse 1.2s infinite;
-    }
-
-    @keyframes pulse {
-      from { background-position: 0% }
-      to { background-position: 200% }
-    }
-
-    hr {
-      margin: 28px 0;
-      border: none;
-      border-top: 1px solid #e5e7eb;
-    }
 
     footer {
       margin-top: auto;
@@ -250,26 +229,130 @@
 </div>
 
 <script>
-const modeRadios = document.querySelectorAll('input[name="mode"]');
+const trackBtn = document.getElementById('trackBtn');
+const errorEl = document.getElementById('error');
+
 const singleSection = document.getElementById('singleSection');
 const batchSection = document.getElementById('batchSection');
+const modeRadios = document.querySelectorAll('input[name="mode"]');
 
-const trackBtn = document.getElementById('trackBtn');
-const batchSummary = document.getElementById('batchSummary');
+const singleInput = document.getElementById('singleInput');
+const carrierSelect = document.getElementById('carrierSelect');
+const batchFileInput = document.getElementById('batchFile');
+const exportFormatSelect = document.getElementById('exportFormat');
+
+const resultSingle = document.getElementById('resultSingle');
+const statusEl = document.getElementById('status');
+const courierEl = document.getElementById('courier');
+const eventsEl = document.getElementById('events');
+
 const resultBatch = document.getElementById('resultBatch');
+const batchSummary = document.getElementById('batchSummary');
+const downloadBtn = document.getElementById('downloadBtn');
 const clearBtn = document.getElementById('clearBtn');
+
+let mode = 'single';
 
 modeRadios.forEach(r => {
   r.addEventListener('change', e => {
-    singleSection.style.display = e.target.value === 'single' ? 'block' : 'none';
-    batchSection.style.display = e.target.value === 'batch' ? 'block' : 'none';
+    mode = e.target.value;
+    singleSection.style.display = mode === 'single' ? 'block' : 'none';
+    batchSection.style.display = mode === 'batch' ? 'block' : 'none';
   });
 });
 
-clearBtn.onclick = () => {
+trackBtn.addEventListener('click', async () => {
+  errorEl.style.display = 'none';
+  resultSingle.style.display = 'none';
   resultBatch.style.display = 'none';
-  batchSummary.textContent = '';
-  document.getElementById('batchFile').value = '';
+
+  trackBtn.disabled = true;
+  trackBtn.textContent = 'Processing…';
+
+  try {
+    if (mode === 'batch') {
+      const file = batchFileInput.files[0];
+      if (!file) throw new Error('Please upload a file.');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('export_format', exportFormatSelect.value);
+
+      const res = await fetch(
+        'https://api.transportal.gr/webhook/track-batch',
+        { method: 'POST', body: formData }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      batchSummary.textContent = 'Batch processed successfully.';
+      downloadBtn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download =
+          exportFormatSelect.value === 'xlsx'
+            ? 'tracking-results.xlsx'
+            : 'tracking-results.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+
+      resultBatch.style.display = 'block';
+      return;
+    }
+
+    const value = singleInput.value.trim();
+    if (!value) throw new Error('Please enter a tracking number or reference.');
+
+    const res = await fetch(
+      'https://api.transportal.gr/webhook/track-mvp',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracking: value, carrier: carrierSelect.value }),
+      }
+    );
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    let data = await res.json();
+    if (Array.isArray(data)) data = data[0];
+
+    statusEl.textContent = `Status: ${data.status || 'Unknown'}`;
+    courierEl.textContent = `Carrier: ${data.carrier || 'Unknown'}`;
+
+    eventsEl.innerHTML = '';
+    if (Array.isArray(data.events)) {
+      data.events.forEach(e => {
+        const div = document.createElement('div');
+        div.className = 'event';
+        div.innerHTML = `
+          <div><strong>${e.status}</strong></div>
+          <div class="muted">${new Date(e.datetime).toLocaleString()}</div>
+        `;
+        eventsEl.appendChild(div);
+      });
+    }
+
+    resultSingle.style.display = 'block';
+
+  } catch (err) {
+    errorEl.textContent = err.message || 'Something went wrong.';
+    errorEl.style.display = 'block';
+  } finally {
+    trackBtn.disabled = false;
+    trackBtn.textContent = 'Track shipments';
+  }
+});
+
+clearBtn.onclick = () => {
+  batchFileInput.value = '';
+  resultBatch.style.display = 'none';
 };
 </script>
 
