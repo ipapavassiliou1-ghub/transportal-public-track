@@ -39,6 +39,12 @@
     h1 { margin: 0 0 8px 0; }
     h2 { margin: 0 0 12px 0; font-size: 18px; }
 
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .card {
       background: var(--card);
       border-radius: 16px;
@@ -90,7 +96,8 @@
       margin-bottom: 16px;
     }
 
-    .modeToggle label {
+    .modeToggle label,
+    .subToggle label {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -102,30 +109,22 @@
     .subToggle {
       display: flex;
       gap: 16px;
-      margin-bottom: 12px;
+      margin: 10px 0 8px;
     }
 
-    .subToggle label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 600;
+    .helper {
       color: var(--muted);
-      cursor: pointer;
+      font-size: 13px;
+      margin-top: -6px;
+      margin-bottom: 16px;
     }
 
-    .result {
-      margin-top: 24px;
-      opacity: 0;
-      transform: translateY(6px);
-      animation: fadeIn 0.25s ease forwards;
-    }
+    .result { margin-top: 24px; }
 
-    @keyframes fadeIn {
-      to { opacity: 1; transform: translateY(0); }
+    .status {
+      font-weight: 800;
+      margin-bottom: 6px;
     }
-
-    .status { font-weight: 800; margin-bottom: 6px; }
 
     .error {
       color: var(--error);
@@ -133,9 +132,15 @@
       margin-top: 16px;
     }
 
+    /* Skeleton */
     .skeleton {
       height: 14px;
-      background: linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%);
+      background: linear-gradient(
+        90deg,
+        #eee 25%,
+        #f5f5f5 37%,
+        #eee 63%
+      );
       background-size: 400% 100%;
       animation: shimmer 1.4s ease infinite;
       border-radius: 6px;
@@ -145,6 +150,16 @@
     @keyframes shimmer {
       0% { background-position: 100% 0; }
       100% { background-position: -100% 0; }
+    }
+
+    /* Fade-in */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .fadeIn {
+      animation: fadeInUp 240ms ease-out;
     }
 
     footer {
@@ -181,18 +196,34 @@
     <div id="singleSection">
       <h2>Single tracking</h2>
 
-      <div class="subToggle">
-        <label><input type="radio" name="singleType" value="tracking" checked /> Tracking</label>
-        <label><input type="radio" name="singleType" value="reference" /> Reference</label>
+      <!-- shipment/reference toggle -->
+      <div class="subToggle" aria-label="Single search type">
+        <label>
+          <input type="radio" name="singleMode" value="tracking" checked />
+          Tracking
+        </label>
+        <label>
+          <input type="radio" name="singleMode" value="reference" />
+          Reference
+        </label>
       </div>
 
+      <label id="singleLabel">Tracking number</label>
       <input id="singleInput" placeholder="e.g. 1Z999AA10123456784" />
+      <div id="singleHelper" class="helper">Use a tracking number from the courier.</div>
+
+      <!-- SINGLE RESULT -->
+      <div id="resultSingle" class="result" style="display:none;">
+        <div class="status" id="singleStatus"></div>
+        <div class="subtitle" id="singleCarrier"></div>
+        <div id="singleEvents" style="margin-top:14px;"></div>
+        <button id="clearSingleBtn" class="clear" type="button">Clear</button>
+      </div>
     </div>
 
     <!-- BATCH -->
     <div id="batchSection" style="display:none;">
       <h2>Batch tracking</h2>
-
       <label>Upload file (CSV or Excel)</label>
       <input id="batchFile" type="file" accept=".csv,.xlsx" />
 
@@ -201,6 +232,13 @@
         <option value="xlsx">Excel (XLSX)</option>
         <option value="csv">CSV</option>
       </select>
+
+      <!-- BATCH RESULT -->
+      <div id="resultBatch" class="result" style="display:none;">
+        <div class="status" id="batchSummary"></div>
+        <button id="downloadBtn" class="secondary" type="button">Download results</button>
+        <button id="clearBtn" class="clear" type="button">Clear</button>
+      </div>
     </div>
 
     <button id="trackBtn">Track shipments</button>
@@ -212,13 +250,6 @@
 
     <div id="error" class="error" style="display:none;"></div>
 
-    <!-- BATCH RESULT -->
-    <div id="resultBatch" class="result" style="display:none;">
-      <div class="status" id="batchSummary"></div>
-      <button id="downloadBtn" class="secondary">Download results</button>
-      <button id="clearBtn" class="clear">Clear</button>
-    </div>
-
   </div>
 
   <footer>
@@ -228,106 +259,267 @@
 </div>
 
 <script>
-const modeRadios = document.querySelectorAll('input[name="mode"]');
-const typeRadios = document.querySelectorAll('input[name="singleType"]');
-const singleSection = document.getElementById('singleSection');
-const batchSection = document.getElementById('batchSection');
+  // -------------------------
+  // Elements
+  // -------------------------
+  const modeRadios = document.querySelectorAll('input[name="mode"]');
+  const singleModeRadios = document.querySelectorAll('input[name="singleMode"]');
 
-const trackBtn = document.getElementById('trackBtn');
-const singleInput = document.getElementById('singleInput');
-const batchFile = document.getElementById('batchFile');
-const exportFormat = document.getElementById('exportFormat');
-const loading = document.getElementById('loading');
+  const singleSection = document.getElementById('singleSection');
+  const batchSection = document.getElementById('batchSection');
 
-const resultBatch = document.getElementById('resultBatch');
-const batchSummary = document.getElementById('batchSummary');
-const downloadBtn = document.getElementById('downloadBtn');
-const clearBtn = document.getElementById('clearBtn');
-const errorEl = document.getElementById('error');
+  const trackBtn = document.getElementById('trackBtn');
+  const loading = document.getElementById('loading');
+  const errorEl = document.getElementById('error');
 
-let mode = 'single';
-let singleType = 'tracking';
+  // Single
+  const singleLabel = document.getElementById('singleLabel');
+  const singleInput = document.getElementById('singleInput');
+  const singleHelper = document.getElementById('singleHelper');
 
-modeRadios.forEach(r =>
-  r.addEventListener('change', e => {
-    mode = e.target.value;
-    singleSection.style.display = mode === 'single' ? 'block' : 'none';
-    batchSection.style.display = mode === 'batch' ? 'block' : 'none';
-  })
-);
+  const resultSingle = document.getElementById('resultSingle');
+  const singleStatus = document.getElementById('singleStatus');
+  const singleCarrier = document.getElementById('singleCarrier');
+  const singleEvents = document.getElementById('singleEvents');
+  const clearSingleBtn = document.getElementById('clearSingleBtn');
 
-typeRadios.forEach(r =>
-  r.addEventListener('change', e => {
-    singleType = e.target.value;
-    singleInput.placeholder =
-      singleType === 'tracking'
-        ? 'e.g. 1Z999AA10123456784'
-        : 'e.g. ORDER-12345';
-  })
-);
+  // Batch
+  const batchFile = document.getElementById('batchFile');
+  const exportFormat = document.getElementById('exportFormat');
 
-trackBtn.addEventListener('click', async () => {
-  errorEl.style.display = 'none';
-  resultBatch.style.display = 'none';
-  loading.style.display = 'block';
-  trackBtn.disabled = true;
-  trackBtn.textContent = 'Processing…';
+  const resultBatch = document.getElementById('resultBatch');
+  const batchSummary = document.getElementById('batchSummary');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearBtn = document.getElementById('clearBtn');
 
-  try {
-    if (mode === 'batch') {
-      if (!batchFile.files[0]) throw new Error('Please upload a file.');
+  // -------------------------
+  // State
+  // -------------------------
+  let mode = 'single';
+  let singleMode = 'tracking';
+  let lastDownloadUrl = null;
 
-      const formData = new FormData();
-      formData.append('file', batchFile.files[0]);
-      formData.append('export_format', exportFormat.value);
+  // -------------------------
+  // Helpers
+  // -------------------------
+  function resetUI() {
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
 
-      const res = await fetch('https://api.transportal.gr/webhook/track-batch', {
+    resultSingle.style.display = 'none';
+    singleEvents.innerHTML = '';
+
+    resultBatch.style.display = 'none';
+    batchSummary.textContent = '';
+
+    if (lastDownloadUrl) {
+      try { URL.revokeObjectURL(lastDownloadUrl); } catch (_) {}
+      lastDownloadUrl = null;
+    }
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg || 'Something went wrong.';
+    errorEl.style.display = 'block';
+  }
+
+  function setLoading(isLoading) {
+    loading.style.display = isLoading ? 'block' : 'none';
+    trackBtn.disabled = isLoading;
+    trackBtn.textContent = isLoading ? 'Processing…' : 'Track shipments';
+  }
+
+  function fadeIn(el) {
+    el.classList.remove('fadeIn');
+    // restart animation
+    void el.offsetWidth;
+    el.classList.add('fadeIn');
+  }
+
+  function headerInt(res, name) {
+    const v = res.headers.get(name);
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // -------------------------
+  // Mode switch
+  // -------------------------
+  modeRadios.forEach(r => {
+    r.addEventListener('change', e => {
+      mode = e.target.value;
+      resetUI();
+
+      singleSection.style.display = mode === 'single' ? 'block' : 'none';
+      batchSection.style.display = mode === 'batch' ? 'block' : 'none';
+    });
+  });
+
+  // Single mode switch (tracking/reference)
+  singleModeRadios.forEach(r => {
+    r.addEventListener('change', e => {
+      singleMode = e.target.value;
+
+      if (singleMode === 'tracking') {
+        singleLabel.textContent = 'Tracking number';
+        singleInput.placeholder = 'e.g. 1Z999AA10123456784';
+        singleHelper.textContent = 'Use a tracking number from the courier.';
+      } else {
+        singleLabel.textContent = 'Reference';
+        singleInput.placeholder = 'e.g. ORDER-12345';
+        singleHelper.textContent = 'Use your internal shipment / order reference.';
+      }
+
+      resetUI();
+      singleInput.focus();
+    });
+  });
+
+  // -------------------------
+  // Main action
+  // -------------------------
+  trackBtn.addEventListener('click', async () => {
+    resetUI();
+    setLoading(true);
+
+    try {
+      // -------------------
+      // BATCH
+      // -------------------
+      if (mode === 'batch') {
+        if (!batchFile.files[0]) {
+          throw new Error('Please upload a file.');
+        }
+
+        const formData = new FormData();
+        formData.append('file', batchFile.files[0]);
+        formData.append('export_format', exportFormat.value);
+
+        const res = await fetch('https://api.transportal.gr/webhook/track-batch', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        // ✅ Read summary from headers (must be set by n8n)
+        const total = headerInt(res, 'x-batch-total');
+        const delivered = headerInt(res, 'x-batch-delivered');
+        const pending = headerInt(res, 'x-batch-pending');
+        const inTransit = headerInt(res, 'x-batch-in-transit');
+        const errorCount = headerInt(res, 'x-batch-error');
+
+        // Now read the file
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        lastDownloadUrl = url;
+
+        // Build summary (fallback if headers missing)
+        if (total === null) {
+          batchSummary.textContent = 'Batch processed · download ready';
+        } else {
+          const parts = [`${total} shipments processed`];
+          if (delivered !== null) parts.push(`${delivered} delivered`);
+          if (pending !== null && pending > 0) parts.push(`${pending} pending`);
+          if (inTransit !== null && inTransit > 0) parts.push(`${inTransit} in transit`);
+          if (errorCount !== null && errorCount > 0) parts.push(`${errorCount} errors`);
+          batchSummary.textContent = parts.join(' · ');
+        }
+
+        // Show + animate
+        resultBatch.style.display = 'block';
+        fadeIn(resultBatch);
+
+        downloadBtn.onclick = () => {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download =
+            exportFormat.value === 'xlsx'
+              ? 'tracking-results.xlsx'
+              : 'tracking-results.csv';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        };
+
+        return;
+      }
+
+      // -------------------
+      // SINGLE
+      // -------------------
+      const value = singleInput.value.trim();
+      if (!value) throw new Error('Please enter a tracking number or reference.');
+
+      const payload =
+        singleMode === 'tracking'
+          ? { tracking: value }
+          : { reference: value };
+
+      const res = await fetch('https://api.transportal.gr/webhook/track-mvp', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const total = res.headers.get('x-batch-total');
-      const delivered = res.headers.get('x-batch-delivered');
-      const pending = res.headers.get('x-batch-pending');
+      let data = await res.json();
+      if (Array.isArray(data)) data = data[0];
 
-      batchSummary.textContent = total
-        ? `${total} shipments processed · ${delivered || 0} delivered · ${pending || 0} pending`
-        : 'Batch processed · download ready';
+      if (typeof data?.error === 'string' && data.error.trim().length > 0) {
+        showError(data.error);
+      }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      singleStatus.textContent = `Status: ${data?.status || 'Unknown'}`;
+      singleCarrier.textContent = `Carrier: ${
+        data?.carrier && data.carrier !== 'UNKNOWN' ? data.carrier : 'Not detected yet'
+      }`;
 
-      downloadBtn.onclick = () => {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download =
-          exportFormat.value === 'xlsx'
-            ? 'tracking-results.xlsx'
-            : 'tracking-results.csv';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      };
+      // Events
+      const events = Array.isArray(data?.events) ? data.events : [];
+      if (!events.length) {
+        singleEvents.innerHTML = `<div class="subtitle">No tracking events yet.</div>`;
+      } else {
+        singleEvents.innerHTML = events.map(e => {
+          const dt = e?.datetime ? new Date(e.datetime).toLocaleString() : '';
+          const loc = e?.location ? ` · ${e.location}` : '';
+          const status = e?.status || 'Update';
+          return `
+            <div class="event">
+              <div><strong>${status}</strong></div>
+              <div class="subtitle">${dt}${loc}</div>
+              ${e?.description ? `<div class="subtitle">${e.description}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+      }
 
-      resultBatch.style.display = 'block';
+      resultSingle.style.display = 'block';
+      fadeIn(resultSingle);
+
+    } catch (err) {
+      console.error(err);
+      showError(err?.message || 'Something went wrong.');
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    errorEl.textContent = err.message || 'Something went wrong.';
-    errorEl.style.display = 'block';
-  } finally {
-    loading.style.display = 'none';
-    trackBtn.disabled = false;
-    trackBtn.textContent = 'Track shipments';
-  }
-});
+  });
 
-clearBtn.onclick = () => {
-  batchFile.value = '';
-  resultBatch.style.display = 'none';
-};
+  // -------------------------
+  // Clear buttons
+  // -------------------------
+  clearBtn.onclick = () => {
+    batchFile.value = '';
+    resetUI();
+  };
+
+  clearSingleBtn.onclick = () => {
+    singleInput.value = '';
+    resetUI();
+    singleInput.focus();
+  };
 </script>
 
 </body>
