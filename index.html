@@ -520,10 +520,16 @@
       const value = singleInput.value.trim();
       if (!value) throw new Error('Please enter a tracking number or reference.');
 
-      const payload =
-        singleMode === 'tracking'
-          ? { tracking: value }
-          : { reference: value };
+      let payload;
+
+      if (singleMode === 'tracking') {
+        payload = {
+          tracking: value,
+          carrier: carrierSelect.value || 'AUTO'
+        };
+      } else {
+      payload = { reference: value };
+      }
 
       const res = await fetch('https://api.transportal.gr/webhook/track-mvp', {
         method: 'POST',
