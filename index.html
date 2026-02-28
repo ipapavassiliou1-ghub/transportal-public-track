@@ -269,6 +269,17 @@
       <input id="singleInput" placeholder="e.g. 1Z999AA10123456784" />
       <div id="singleHelper" class="helper">Use a tracking number from the courier.</div>
 
+      <label for="carrierSelect">Carrier</label>
+      <select id="carrierSelect">
+        <option value="AUTO" selected>Auto-detect</option>
+        <option value="ACS">ACS</option>
+        <option value="DHL">DHL</option>
+        <option value="UPS">UPS</option>
+        <option value="FEDEX">FedEx</option>
+        <option value="ELTA">ELTA</option>
+      </select>
+     <div class="helper">Select carrier if known, otherwise use Auto-detect.</div>
+
       <!-- SINGLE RESULT -->
       <div id="resultSingle" class="result" style="display:none;">
         <div class="status" id="singleStatus"></div>
